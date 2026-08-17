@@ -1,6 +1,6 @@
 # opencode-route-standard
 
-Opencode-Zen Deepseek-v4-flash-free代餐，主包用的是WSL内的DSH，用DeepSeek-v4-flash-free一直说免费额度用完，但是在Win的Opencode就能用，所以计划做Win端Opencode端的代餐（毕竟是免费的），因为上下文才200k就不用Route-spec预设了，只做了Route-standard，还没测试compact后会不会降智（但最好是控制一下上下文，一般的任务用Route-standard的200K上下文就足够了，毕竟是代餐）
+Opencode-Zen Deepseek-v4-flash-free代餐，主包用的是WSL内的DSH，用DeepSeek-v4-flash-free一直说免费额度用完，但是在Win的Opencode就能用，所以计划做Win端Opencode端的代餐（毕竟是免费的），因为上下文才200k就不用Route-spec预设了，只做了Route-standard
 
 在 opencode 上还原 [yjh051108/dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) v0.3.0 的 **standard 模式**（RL 接口还原）：首轮 system 只有 RL 训练句 + shell/edit 窄工具面，模型走 think-act 短循环。单文件、零 npm 依赖。
 
