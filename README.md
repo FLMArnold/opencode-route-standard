@@ -79,25 +79,11 @@ opencode run --agent router-standard --model deepseek/deepseek-v4-flash --varian
 |------|------|------|------|
 | `enabled` | boolean | `true` | 总开关。`false` 时所有 hook 跳过 |
 | `debug` | boolean | `false` | true 时用 `client.app.log()` 记录路由结果（TUI 按 `L` 查日志，搜 `opencode-route-standard`） |
-| `system_mode` | string | `"replace"` | `"replace"` = system 完全替换；`"append"` = 追加到末尾（保留 opencode 基础提示） |
-| `system_file` | string/null | `null` | 自定义 system 文件路径（见下节）。`null` = 使用 RL 训练句 |
+| `system_mode` | string | `"replace"` | `"replace"` = system 完全替换为 RL 训练句；`"append"` = 追加到末尾（保留 opencode 基础提示） |
 
 配置每次请求重读（热重载），改完即生效，无需重启。
 
-## 自定义 system（继承 opencode-systemprompt）
-
-本插件并入原 `opencode-systemprompt` 的 system 剥离/替换能力：配置 `system_file` 指向任意 md 文件时，首轮 system 热重载为该文件内容（而不是 RL 训练句），其余行为不变（窄工具面、接口净化、cwd 锚点照旧）。未设置时为 RL 接口还原，两者二选一。
-
-```json
-{
-  "system_file": "~/.config/opencode/systemprompt.md"
-}
-```
-
-- 支持 `~` 展开与 UTF-8 BOM 剥离；读取失败自动回退 RL 训练句（system 不会为空）。
-- 文件每次请求重读，修改即生效（热重载）。
-- 仓库内 `systemprompt.md` 为示例模板，可复制后自定义（中文工作方式、AGENTS.md 约定等）。
-- 注意：自定义 system 会取代 RL 训练句，think 的复数协作形式（We need/Let's）以 RL 训练句为前提，自定义内容越接近原句效果越稳定。
+> 定位：纯 Agent 路由增强。路由只接管首轮 system 与工具面，完成后按 opencode 正常流程走，不改变用户既有的使用习惯（AGENTS.md、基础提示等正常生效——`system_mode: "append"` 时完全保留）。
 
 ## 能力边界
 

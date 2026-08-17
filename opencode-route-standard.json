@@ -1,6 +1,5 @@
 {
   "enabled": true,
   "debug": false,
-  "system_mode": "replace",
-  "system_file": null
+  "system_mode": "replace"
 }
