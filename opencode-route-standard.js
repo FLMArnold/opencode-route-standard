@@ -2,9 +2,13 @@
 // 单文件、零 npm 依赖。效果：think 全程复数协作形式（We need / Let's / We should），
 // 无 "I" / "Let me" 单数自述（对齐 yjh051108/dsh-router-standard v0.3.0 standard 模式 RL 接口形状）。
 //
+// 可选自定义 system（继承自 opencode-systemprompt 的剥离/替换能力）：
+//   配置 system_file 指向任意 md 文件时，system 热重载为该文件内容（含 ~ 展开、
+//   BOM 剥离），不再使用 RL 训练句；读取失败自动回退 RL_PERSONA。
+//
 // hook 映射：
 //   chat.message                         → 首轮窄工具面（只留 edit + bash，其余显式 false）
-//   experimental.chat.system.transform   → system 完全替换为 RL 训练句 + cwd 锚点
+//   experimental.chat.system.transform   → system 完全替换为 RL 训练句（或自定义 md）+ cwd 锚点
 //   tool.definition                      → bash/edit 描述压缩为 RL 简洁版
 //   tool.execute.before                  → 记录首次工具调用 → 后续放开全量
 //   tool.dev_router_status               → 路由状态查看
@@ -39,11 +43,30 @@ function readConfig() {
       if (cfg && typeof cfg === "object") return cfg
     } catch { /* try next */ }
   }
-  return { enabled: true, debug: false, system_mode: "replace" }
+  return { enabled: true, debug: false, system_mode: "replace", system_file: null }
 }
 
 function stripBOM(s) {
   return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s
+}
+
+// 展开 ~ 为家目录（system_file 支持 ~/ 写法）
+function expandHome(p) {
+  if (!p) return p
+  if (p === "~") return homedir()
+  if (p.startsWith("~/") || p.startsWith("~\\")) return path.join(homedir(), p.slice(2))
+  return p
+}
+
+// system 内容解析：system_file 配置 → 热重载读 md（失败回退 RL 训练句）
+function resolveSystem(cfg) {
+  if (cfg.system_file) {
+    try {
+      const text = stripBOM(readFileSync(expandHome(cfg.system_file), "utf8"))
+      if (text.trim().length > 0) return { text, source: cfg.system_file }
+    } catch { /* fall through */ }
+  }
+  return { text: RL_PERSONA, source: "RL_PERSONA" }
 }
 
 export const OpencodeRouteStandard = async ({ client, directory }) => {
@@ -83,23 +106,34 @@ export const OpencodeRouteStandard = async ({ client, directory }) => {
       } catch { /* silent */ }
     },
 
-    // persona：system 完全替换为 RL 训练句 + cwd 锚点（DSH minimal `complete: true` 语义）。
-    // opencode 内置基础提示是唯一承载 cwd 的地方，完全替换后模型会丢失工作目录锚点
-    // （实测曾写到 Temp\opencode），故追加一行 cwd 陈述。
+    // persona：system 完全替换为 RL 训练句（或自定义 md）+ cwd 锚点（DSH minimal
+    // `complete: true` 语义）。opencode 内置基础提示是唯一承载 cwd 的地方，完全替换
+    // 后模型会丢失工作目录锚点（实测曾写到 Temp\opencode），故追加一行 cwd 陈述。
     // 配置 system_mode="append" 时改为追加（保留基础提示，自带 cwd）。
     "experimental.chat.system.transform": async (input, output) => {
       try {
         const cfg = readConfig()
         if (!cfg || cfg.enabled === false) return
         const system = output.system
+        const { text, source } = resolveSystem(cfg)
         if (cfg.system_mode === "append") {
           const idx = system.findIndex((s) => /persona/i.test(s))
-          if (idx === -1) system.push(RL_PERSONA)
-          else system[idx] = RL_PERSONA
+          if (idx === -1) system.push(text)
+          else system[idx] = text
           return
         }
         system.length = 0
-        system.push(`${RL_PERSONA}\n\nCurrent working directory: ${cwd}`)
+        system.push(`${text}\n\nCurrent working directory: ${cwd}`)
+
+        if (cfg.debug) {
+          await client.app.log({
+            body: {
+              service: "opencode-route-standard",
+              level: "info",
+              message: `system: source=${source}`,
+            },
+          })
+        }
       } catch { /* silent */ }
     },
 
@@ -147,9 +181,10 @@ export const OpencodeRouteStandard = async ({ client, directory }) => {
         execute: async ({ sessionID }) => {
           try {
             const cfg = readConfig()
+            const { source } = resolveSystem(cfg)
             return [
               "mode=standard (RL interface restore)",
-              `persona=${RL_PERSONA}`,
+              `system source=${source}`,
               `first-turn core=[${[...CORE_TOOLS, "bash"].join(", ")}]`,
               `narrowed=${!toolCalledSessions.has(sessionID)}`,
               `system_mode=${cfg.system_mode}`,
