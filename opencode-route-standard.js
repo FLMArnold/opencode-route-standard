@@ -7,12 +7,12 @@
 //   system.transform 无 agent 输入 → 从会话历史取最近一条用户消息的 agent）。
 //   其他 agent 预设（Build/Plan 等）完全不干预：不窄工具面、不替换 system。
 //
-// hook 映射：
+// hook 映射（4 hook + 1 dev 工具）：
 //   chat.message                         → 首轮窄工具面（只留 edit + bash，其余显式 false）
 //   experimental.chat.system.transform   → system 完全替换为 RL 训练句 + cwd 锚点
 //   tool.definition                      → bash/edit 描述压缩为 RL 简洁版
 //   tool.execute.before                  → 记录首次工具调用 → 后续放开全量
-//   tool.dev_router_status               → 路由状态查看
+//   tool.dev_router_status               → 路由状态查看（dev 工具，非 hook）
 //
 // 全局约束：零 npm 依赖；hook 内一切异常静默吞；原地修改 output 不切断引用；
 // 配置放独立 opencode-route-standard.json（opencode.json 严格 schema 校验）。

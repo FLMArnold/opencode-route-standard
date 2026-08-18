@@ -1,1 +1,4 @@
-node_modules/
+﻿node_modules/
+# AGENTS.md 本地开发指南，不入库
+AGENTS.md
+sandbox/hook-debug.log

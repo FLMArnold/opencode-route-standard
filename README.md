@@ -1,6 +1,8 @@
 # opencode-route-standard
 
-Opencode-Zen Deepseek-v4-flash-free代餐，主包用的是WSL内的DSH，用DeepSeek-v4-flash-free一直说免费额度用完，但是在Win的Opencode就能用，所以计划做Win端Opencode端的代餐（毕竟是免费的），因为上下文才200k就不用Route-spec预设了，只做了Route-standard
+Opencode-Zen Deepseek-v4-flash-free代餐，主包用的是WSL内的DSH，用DeepSeek-v4-flash-free一直说免费额度用完，但是在Win的Opencode就能用，所以计划做Win端Opencode端的代餐（毕竟是免费的），因为上下文才200k就不用Route-spec预设了，只做了Route-standard。
+
+> 现状：免费额度（`opencode/deepseek-v4-flash-free`）已用尽，实测走 `opencode-go/deepseek-v4-flash`（OpenCode Go 直连付费，无额度限制）；其他 provider 可按环境替换。
 
 在 opencode 上还原 [yjh051108/dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) v0.3.0 的 **standard 模式**（RL 接口还原）：首轮 system 只有 RL 训练句 + shell/edit 窄工具面，模型走 think-act 短循环。单文件、零 npm 依赖。
 
@@ -10,15 +12,15 @@ Opencode-Zen Deepseek-v4-flash-free代餐，主包用的是WSL内的DSH，用Dee
 
 ## 效果
 
-模型的 think 全程为**复数协作形式**（`We need to` / `Let's` / `We should` / `We can`），不再出现单数自述（`I` / `Let me`）——对齐 DSH standard 模式在 deepseek-v4-flash 上的实测接口形状：
+模型的 think **以复数协作形式为主**（`We need to` / `Let's` / `We should` / `We can`），单数自述（`I` / `Let me`）明显减少——对齐 DSH standard 模式在 deepseek-v4-flash 上的实测接口形状：
 
 ```
 Thinking: We need to inspect the current directory for buggy.js. Let's list files.
 ```
 
-> 注意：复数自述受推理 variant 影响——`reasoning: "low"` 会抑制复数自述，验证时用默认 variant（不传 reasoning 参数）。
+> 注意：复数自述受推理 variant 影响——`reasoning: "low"` 会**强烈抑制**复数自述（实测 we/let's 计数为 0），验证时用默认 variant（不传 reasoning 参数）。
 
-实测记录（deepseek/deepseek-v4-flash，think 变体）：
+实测记录（deepseek-v4-flash）：
 
 | 任务类型 | 任务 | think 特征 |
 |---------|------|-----------|
@@ -29,9 +31,9 @@ Thinking: We need to inspect the current directory for buggy.js. Let's list file
 
 ## 原理
 
-5 个 hook 协作实现 RL 接口还原：
+4 个 hook + 1 个 dev 工具协作实现 RL 接口还原：
 
-| hook | 作用 |
+| hook / 工具 | 作用 |
 |------|------|
 | `chat.message` | 首轮窄工具面：非核心工具**显式置 false**（`resolveTools` 黑名单语义 `user.tools[k]===false` → 工具从请求 schema 消失）；插件 dev 工具与 `narrowExclude` 配置项同样显式 false；**agent gate**：非 router-standard 会话直接跳过 |
 | `experimental.chat.system.transform` | system **完全替换**为 RL 训练句（`You are a helpful software engineer assistant.`）+ 一行 cwd 锚点（opencode 内置基础提示是唯一承载 cwd 的地方，完全替换后模型会丢失工作目录锚点，实测曾写到 `Temp\opencode`）；**agent gate**：从会话历史判定 agent |
@@ -93,15 +95,15 @@ cp agents/router-standard.md ~/.config/opencode/agent/router-standard.md
 ### 4. 验证
 
 ```sh
-opencode run --agent router-standard --model deepseek/deepseek-v4-flash --thinking "列出你当前可用的所有工具名称" --dir <测试目录>
+opencode run --agent router-standard --model opencode-go/deepseek-v4-flash --thinking "列出你当前可用的所有工具名称" --dir <测试目录>
 ```
 
-预期：首轮工具只有 `bash`/`edit`；think 出现 `We need to` / `Let's` 等复数协作形式（默认 variant）。
+预期：首轮工具只有 `bash`/`edit`；think 以 `We need to` / `Let's` 等复数协作形式为主（默认 variant）。
 
 agent gate 负向验证（issue #1 验收）：
 
 ```sh
-opencode run --agent build --model deepseek/deepseek-v4-flash "列出你当前可用的所有工具名称" --dir <测试目录>
+opencode run --agent build --model opencode-go/deepseek-v4-flash "列出你当前可用的所有工具名称" --dir <测试目录>
 ```
 
 预期：build 会话看到全量工具，无任何路由干预（debug 日志无 router 行）。
@@ -120,7 +122,7 @@ opencode run --agent build --model deepseek/deepseek-v4-flash "列出你当前�
 | `enabled` | boolean | `true` | 总开关。`false` 时所有 hook 跳过 |
 | `debug` | boolean | `false` | true 时用 `client.app.log()` 记录路由结果（TUI 按 `L` 查日志，搜 `opencode-route-standard`） |
 | `system_mode` | string | `"replace"` | `"replace"` = system 完全替换为 RL 训练句；`"append"` = 追加到末尾（保留 opencode 基础提示） |
-| `narrowExclude` | string[] | `[]` | 首轮窄面时额外显式排除的工具 id（如 MCP 工具名）；resolveTools 黑名单语义，写 `false` 即过滤 |
+| `narrowExclude` | string[] | `[]` | 首轮窄面时额外显式排除的工具 id（如 MCP 工具名）；列出的 id 在窄面请求中显式置 false（resolveTools 黑名单语义） |
 
 配置每次请求重读（热重载），改完即生效，无需重启。
 
@@ -130,6 +132,7 @@ opencode run --agent build --model deepseek/deepseek-v4-flash "列出你当前�
 
 - **不能自动感知 provider 额度/失效**：provider 管理是 opencode 的事，插件只做消息改写。
 - **`tool.definition` 无 agent gate**：hook input 只有 toolID，无法按 agent 区分（SDK 限制）；它只压缩工具描述文本，不影响工具行为与权限判定。
+- **`tool.execute.before` 无 agent gate**：hook input 无 agent，记录状态对非 router-standard 会话也无副作用（窄化 gate 在 `chat.message`，其他预设从不窄化）。
 - **跨进程状态不共享**：窄化状态为进程内单例，首个工具调用放开全量需交互式 TUI 会话验证（`opencode run` 是一次性进程）。
 
 ## 上游参考
