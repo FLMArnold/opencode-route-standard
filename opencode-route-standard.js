@@ -31,6 +31,8 @@ const CORE_TOOLS = ["edit"]
 
 // 已调用过工具的会话：首轮窄面 → 首个工具调用后放开全量
 const toolCalledSessions = new Set()
+// 已补注入过第二轮上下文（AGENTS.md）的会话：只注入一次
+const contextInjectedSessions = new Set()
 
 // agent gate：路由只作用于 router-standard 预设（其余 agent 会话完全不干预）。
 // opencode 的 UserMessage 携带 agent 字段（agent 预设文件名）；system.transform
@@ -76,6 +78,25 @@ function readConfig() {
 
 function stripBOM(s) {
   return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s
+}
+
+// 第二轮调用前补注入的"第一轮被屏蔽且不会再现"的上下文：目前 = AGENTS.md
+// （项目根 + 全局配置目录，opencode 原生注入这两份，system 完全替换后不会自己回来）。
+// MCP 工具在放开全量后会随工具 schema 再现，skill 由 superpowers bootstrap 常驻，故不在此补。
+function readBlockedContext(cwd) {
+  const chunks = []
+  const candidates = [
+    path.join(cwd, "AGENTS.md"),
+    path.join(homedir(), ".config", "opencode", "AGENTS.md"),
+  ]
+  for (const p of candidates) {
+    try {
+      const s = stripBOM(readFileSync(p, "utf8")).trim()
+      if (s) chunks.push(s)
+    } catch { /* skip */ }
+  }
+  if (chunks.length === 0) return ""
+  return `\n\n[Re-injected context after first-round routing]\n${chunks.join("\n\n---\n\n")}`
 }
 
 export const OpencodeRouteStandard = async ({ client, directory }) => {
@@ -216,21 +237,43 @@ export const OpencodeRouteStandard = async ({ client, directory }) => {
         if (!isRouterStandardAgent(agent)) return
         const lastUser = [...messages].reverse().find((m) => m.info?.role === "user")
         if (!lastUser || !Array.isArray(lastUser.parts)) return
-        // 幂等守卫：该用户消息已注入过锚点则跳过（防止每次请求重复追加）
-        if (lastUser.parts.some((p) => p.text && p.text.includes("Environment: Windows"))) return
-        const anchor =
-          `\n${RL_PERSONA} Current working directory: ${cwd}. Environment: Windows, Shell: Windows PowerShell 5.1.`
-        lastUser.parts.push({ type: "text", text: anchor, synthetic: true })
-        if (cfg.debug) {
-          try {
-            await client.app.log({
-              body: {
-                service: "opencode-route-standard",
-                level: "info",
-                message: `router: standard-anchor injected agent=${agent}`,
-              },
-            })
-          } catch { /* silent */ }
+        const sessionID = lastUser.info.sessionID
+        // 近距 RL 环境锚点（每轮幂等追加；环境信息不硬编码进工具 schema）
+        if (!lastUser.parts.some((p) => p.text && p.text.includes("Environment: Windows"))) {
+          const anchor =
+            `\n${RL_PERSONA} Current working directory: ${cwd}. Environment: Windows, Shell: Windows PowerShell 5.1.`
+          lastUser.parts.push({ type: "text", text: anchor, synthetic: true })
+          if (cfg.debug) {
+            try {
+              await client.app.log({
+                body: {
+                  service: "opencode-route-standard",
+                  level: "info",
+                  message: `router: standard-anchor injected agent=${agent}`,
+                },
+              })
+            } catch { /* silent */ }
+          }
+        }
+        // 第二轮调用前补注入：第一轮被 system 替换屏蔽、且之后不会自己再现的
+        // 上下文（AGENTS.md：项目根 + 全局配置目录）。只在首个工具调用发生后注入一次。
+        if (toolCalledSessions.has(sessionID) && !contextInjectedSessions.has(sessionID)) {
+          const ctx = readBlockedContext(cwd)
+          if (ctx) {
+            lastUser.parts.push({ type: "text", text: ctx, synthetic: true })
+            contextInjectedSessions.add(sessionID)
+            if (cfg.debug) {
+              try {
+                await client.app.log({
+                  body: {
+                    service: "opencode-route-standard",
+                    level: "info",
+                    message: `router: second-call context injected agent=${agent}`,
+                  },
+                })
+              } catch { /* silent */ }
+            }
+          }
         }
       } catch { /* silent */ }
     },
