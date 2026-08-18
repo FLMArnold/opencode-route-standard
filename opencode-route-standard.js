@@ -170,7 +170,7 @@ export const OpencodeRouteStandard = async ({ client, directory }) => {
         const cfg = readConfig()
         if (!cfg || cfg.enabled === false) return
         const RL_TOOL_DESCRIPTIONS = {
-          bash: "Execute terminal commands in the current working directory.",
+          bash: "Execute terminal commands in the current working directory (Windows PowerShell 5.1).",
           edit: "Edit a file by exact string replacement.",
         }
         const desc = RL_TOOL_DESCRIPTIONS[input.toolID]
@@ -187,6 +187,48 @@ export const OpencodeRouteStandard = async ({ client, directory }) => {
               if (props[key] && typeof props[key] === "object") props[key].description = text
             }
           }
+        }
+      } catch { /* silent */ }
+    },
+
+    // 近距 RL 环境锚点（standard）：把 RL 身份 + cwd + 本机环境以 synthetic
+    // 文本追加到当前用户消息末尾。注册顺序=执行顺序，本插件须注册在会注入
+    // 内容的插件（如 superpowers bootstrap）之后；追加在末尾天然晚于任何
+    // prepend 型注入，保证本插件注入时机最后生效。system 仍为纯 RL 句（静态
+    // 前缀，缓存友好），此处只做近距补强，不改 RL_PERSONA 原文。
+    "experimental.chat.messages.transform": async (_input, output) => {
+      try {
+        const cfg = readConfig()
+        if (!cfg || cfg.enabled === false) return
+        const messages = output.messages
+        if (!Array.isArray(messages) || messages.length === 0) return
+        // agent gate：从后往前找带 agent 的用户消息（synthetic 消息也带 agent）
+        let agent = ""
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const info = messages[i]?.info
+          if (info?.role === "user" && typeof info.agent === "string" && info.agent) {
+            agent = info.agent
+            break
+          }
+        }
+        if (!isRouterStandardAgent(agent)) return
+        const lastUser = [...messages].reverse().find((m) => m.info?.role === "user")
+        if (!lastUser || !Array.isArray(lastUser.parts)) return
+        // 幂等守卫：该用户消息已注入过锚点则跳过（防止每次请求重复追加）
+        if (lastUser.parts.some((p) => p.text && p.text.includes("Environment: Windows"))) return
+        const anchor =
+          `\n${RL_PERSONA} Current working directory: ${cwd}. Environment: Windows, Shell: Windows PowerShell 5.1.`
+        lastUser.parts.push({ type: "text", text: anchor, synthetic: true })
+        if (cfg.debug) {
+          try {
+            await client.app.log({
+              body: {
+                service: "opencode-route-standard",
+                level: "info",
+                message: `router: standard-anchor injected agent=${agent}`,
+              },
+            })
+          } catch { /* silent */ }
         }
       } catch { /* silent */ }
     },

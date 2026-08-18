@@ -31,28 +31,33 @@ Thinking: We need to inspect the current directory for buggy.js. Let's list file
 
 ## 原理
 
-4 个 hook + 1 个 dev 工具协作实现 RL 接口还原：
+5 个 hook + 1 个 dev 工具协作实现 RL 接口还原：
 
 | hook / 工具 | 作用 |
 |------|------|
 | `chat.message` | 首轮窄工具面：非核心工具**显式置 false**（`resolveTools` 黑名单语义 `user.tools[k]===false` → 工具从请求 schema 消失）；插件 dev 工具与 `narrowExclude` 配置项同样显式 false；**agent gate**：非 router-standard 会话直接跳过 |
 | `experimental.chat.system.transform` | system **完全替换**为 RL 训练句（`You are a helpful software engineer assistant.`）+ 一行 cwd 锚点（opencode 内置基础提示是唯一承载 cwd 的地方，完全替换后模型会丢失工作目录锚点，实测曾写到 `Temp\opencode`）；**agent gate**：从会话历史判定 agent |
-| `tool.definition` | bash/edit 的 description 与参数描述压缩为 RL 简洁版（内置工具描述携带大量指令文本，模型 think 会引用并据此推理，把接口拉离 RL 训练形状） |
+| `tool.definition` | bash/edit 的 description 与参数描述压缩为 RL 简洁版，bash 描述带静态环境锚点 `(Windows PowerShell 5.1)`（内置工具描述携带大量指令文本，模型 think 会引用并据此推理，把接口拉离 RL 训练形状） |
+| `experimental.chat.messages.transform` | **近距 RL 环境锚点**：把 RL 身份 + cwd + 本机环境（Windows + PowerShell 5.1）以 synthetic 文本**追加到当前用户消息末尾**（最后注入，幂等守卫按锚点文本去重）；**agent gate**：只作用于 router-standard 会话 |
 | `tool.execute.before` | 记录首个工具调用 → 后续请求放开全量工具 |
 | `tool.dev_router_status` | 查看会话路由状态（窄面/已放开、persona、核心工具集） |
 
 首轮后模型只看到 `bash` + `edit` 两个工具；第一个工具调用后全量恢复。
 
+> **注入时机（2026-08-18 实测）**：opencode 插件 hook **注册顺序 = 执行顺序**（plugin 数组先注册的先执行）。要让本插件注入最后生效，必须**注册在会注入内容的插件之后**（如 superpowers 的 bootstrap），且本插件用"追加到用户消息末尾"，天然晚于任何 prepend 型注入。全局配置中 `superpowers` 在前、本插件在最后即满足该约定；若未来 super-injector 统一注入 skill/AGENTS.md/MCP，本插件仍需保持在其后注册/执行。
+
 ## 安装
 
 > 定位：这是**代餐插件（临时用用）**——只在需要复现 DSH standard 路由形状时启用。优先推荐**隔离 git 目录**方式安装，用完即弃、不污染全局配置与既有项目。
 
-### 1. 准备隔离 git 目录（推荐）
+### 1. 准备隔离 git 目录（推荐，先询问用户）
+
+> 本 README 供安装方的用户/模型阅读：**不要自行假设安装目录**。执行前先向用户确认把隔离 git 目录建在哪里（例如 `~/route-standard-playground`、`D:\dev\route-standard`，或某个项目内子目录），用户明确指定后再动手。
 
 插件注册到哪，就在哪生效。代餐场景建议单独建一个 git 隔离目录，把插件装进该项目级配置：
 
 ```sh
-mkdir ~/route-standard-playground && cd ~/route-standard-playground
+mkdir <用户指定的目录> && cd <用户指定的目录>
 git init   # 独立 git 仓库（harness-RnD 铁律：不 init ~/.config/opencode）
 ```
 
@@ -99,6 +104,19 @@ opencode run --agent router-standard --model opencode-go/deepseek-v4-flash --thi
 ```
 
 预期：首轮工具只有 `bash`/`edit`；think 以 `We need to` / `Let's` 等复数协作形式为主（默认 variant）。
+
+环境锚点与注入时机验证（2026-08-18）：
+
+```sh
+# 明确答 PowerShell，不再猜/探测
+opencode run --agent router-standard "本机 Shell 是什么？只根据上下文回答，不要运行探测命令" --model opencode-go/deepseek-v4-flash
+# 建文件：第一条命令即 PowerShell（New-Item/Set-Content），无 POSIX 报错
+opencode run --agent router-standard "在 sandbox 目录创建 r2.txt，内容 hello-r2，然后确认存在" --model opencode-go/deepseek-v4-flash
+# debug=true 时确认近距锚点最后注入
+opencode run --agent router-standard "列出你当前可用的所有工具名称" --model opencode-go/deepseek-v4-flash --print-logs
+```
+
+预期：Shell 明确答 Windows PowerShell 5.1；建文件首条命令即 PowerShell；debug 日志出现 `router: standard-anchor injected agent=router-standard`；首轮工具面仍只有 bash+edit。
 
 agent gate 负向验证（issue #1 验收）：
 
