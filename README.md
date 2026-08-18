@@ -2,8 +2,6 @@
 
 Opencode-Zen Deepseek-v4-flash-free代餐，主包用的是WSL内的DSH，用DeepSeek-v4-flash-free一直说免费额度用完，但是在Win的Opencode就能用，所以计划做Win端Opencode端的代餐（毕竟是免费的），因为上下文才200k就不用Route-spec预设了，只做了Route-standard。
 
-> 现状：免费额度（`opencode/deepseek-v4-flash-free`）已用尽，实测走 `opencode-go/deepseek-v4-flash`（OpenCode Go 直连付费，无额度限制）；其他 provider 可按环境替换。
-
 在 opencode 上还原 [yjh051108/dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) v0.3.0 的 **standard 模式**（RL 接口还原）：首轮 system 只有 RL 训练句 + shell/edit 窄工具面，模型走 think-act 短循环。单文件、零 npm 依赖。
 
 ## 作用域（issue #1 修复）
@@ -48,13 +46,13 @@ Thinking: We need to inspect the current directory for buggy.js. Let's list file
 
 ## 安装
 
-> 定位：这是**代餐插件（临时用用）**——只在需要复现 DSH standard 路由形状时启用。优先推荐**隔离 git 目录**方式安装，用完即弃、不污染全局配置与既有项目。
+> 定位：作为**代餐插件**，优先推荐**隔离 git 目录**方式安装，不污染全局配置与既有项目。
 
 ### 1. 准备隔离 git 目录（推荐，先询问用户）
 
 > 本 README 供安装方的用户/模型阅读：**不要自行假设安装目录**。执行前先向用户确认把隔离 git 目录建在哪里（例如 `~/route-standard-playground`、`D:\dev\route-standard`，或某个项目内子目录），用户明确指定后再动手。
 
-插件注册到哪，就在哪生效。代餐场景建议单独建一个 git 隔离目录，把插件装进该项目级配置：
+插件注册到哪，就在哪生效。单独建一个 git 隔离目录，把插件装进该项目级配置：
 
 ```sh
 mkdir <用户指定的目录> && cd <用户指定的目录>
@@ -82,7 +80,7 @@ cp agents/router-standard.md ~/.config/opencode/agent/router-standard.md
 
 用 `opencode --agent router-standard` 启动，或 TUI 内 `/agents` 选择。mode 为 all，可作主 agent 也可作 task 子代理。
 
-### 3. 全局安装（可选，不推荐代餐场景）
+### 3. 全局安装（可选）
 
 在全局 `~/.config/opencode/opencode.json` 的 `plugin` 数组加入同一路径：
 
