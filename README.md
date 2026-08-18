@@ -37,7 +37,7 @@ Thinking: We need to inspect the current directory for buggy.js. Let's list file
 |------|------|
 | `chat.message` | 首轮窄工具面：非核心工具**显式置 false**（`resolveTools` 黑名单语义 `user.tools[k]===false` → 工具从请求 schema 消失）；插件 dev 工具与 `narrowExclude` 配置项同样显式 false；**agent gate**：非 router-standard 会话直接跳过 |
 | `experimental.chat.system.transform` | system **完全替换**为 RL 训练句（`You are a helpful software engineer assistant.`）+ 一行 cwd 锚点（opencode 内置基础提示是唯一承载 cwd 的地方，完全替换后模型会丢失工作目录锚点，实测曾写到 `Temp\opencode`）；**agent gate**：从会话历史判定 agent |
-| `tool.definition` | bash/edit 的 description 与参数描述压缩为 RL 简洁版，bash 描述带静态环境锚点 `(Windows PowerShell 5.1)`（内置工具描述携带大量指令文本，模型 think 会引用并据此推理，把接口拉离 RL 训练形状） |
+| `tool.definition` | bash/edit 的 description 与参数描述压缩为 RL 简洁版（内置工具描述携带大量指令文本，模型 think 会引用并据此推理，把接口拉离 RL 训练形状）；工具描述保持环境无关，本机环境由 messages.transform 近距锚点注入 |
 | `experimental.chat.messages.transform` | **近距 RL 环境锚点**：把 RL 身份 + cwd + 本机环境（Windows + PowerShell 5.1）以 synthetic 文本**追加到当前用户消息末尾**（最后注入，幂等守卫按锚点文本去重）；**agent gate**：只作用于 router-standard 会话 |
 | `tool.execute.before` | 记录首个工具调用 → 后续请求放开全量工具 |
 | `tool.dev_router_status` | 查看会话路由状态（窄面/已放开、persona、核心工具集） |

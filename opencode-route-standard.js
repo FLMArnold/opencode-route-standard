@@ -170,7 +170,9 @@ export const OpencodeRouteStandard = async ({ client, directory }) => {
         const cfg = readConfig()
         if (!cfg || cfg.enabled === false) return
         const RL_TOOL_DESCRIPTIONS = {
-          bash: "Execute terminal commands in the current working directory (Windows PowerShell 5.1).",
+          // 环境信息不硬编码进工具描述（工具 schema 保持环境无关/RL 纯净）；
+          // 本机环境（Windows + PowerShell 5.1）由 messages.transform 近距锚点注入。
+          bash: "Execute terminal commands in the current working directory.",
           edit: "Edit a file by exact string replacement.",
         }
         const desc = RL_TOOL_DESCRIPTIONS[input.toolID]
