@@ -1,6 +1,6 @@
 ---
-description: Router Standard — RL 接口还原：首轮仅 RL 训练句 persona + shell/edit 窄工具面，think-act 短循环。提示词由 opencode-route-standard 插件接管（对齐 dsh-router-standard v0.3.0 standard 模式）。
-mode: primary
+description: Router Standard — RL 接口还原：首轮仅 RL 训练句 persona + shell/edit 窄工具面，think-act 短循环。提示词由 opencode-route-standard 插件接管（对齐 dsh-router-standard v0.3.0 standard 模式）。插件经 agent gate 只作用于本预设，其他预设（Build/Plan）零干预。mode 为 all，可作主 agent 也可作 task 子代理。
+mode: all
 ---
 
 You are a helpful software engineer assistant.
