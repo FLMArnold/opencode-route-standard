@@ -43,9 +43,18 @@ Thinking: We need to inspect the current directory for buggy.js. Let's list file
 
 ## 安装
 
-### 1. 注册插件
+> 定位：这是**代餐插件（临时用用）**——只在需要复现 DSH standard 路由形状时启用。优先推荐**隔离 git 目录**方式安装，用完即弃、不污染全局配置与既有项目。
 
-在全局 `~/.config/opencode/opencode.json` 的 `plugin` 数组加入：
+### 1. 准备隔离 git 目录（推荐）
+
+插件注册到哪，就在哪生效。代餐场景建议单独建一个 git 隔离目录，把插件装进该项目级配置：
+
+```sh
+mkdir ~/route-standard-playground && cd ~/route-standard-playground
+git init   # 独立 git 仓库（harness-RnD 铁律：不 init ~/.config/opencode）
+```
+
+在该目录根目录放 `opencode.json`：
 
 ```json
 {
@@ -56,7 +65,7 @@ Thinking: We need to inspect the current directory for buggy.js. Let's list file
 }
 ```
 
-只想对某个项目启用时，把同一行写进该项目根目录的 `opencode.json` 即可（插件注册到哪，就在哪生效）。
+只在该目录启动 opencode 时插件生效，其他项目完全不受影响。用完删除该目录即可（不残留全局注册）。
 
 ### 2. 安装 agent 预设
 
@@ -66,7 +75,22 @@ cp agents/router-standard.md ~/.config/opencode/agent/router-standard.md
 
 用 `opencode --agent router-standard` 启动，或 TUI 内 `/agents` 选择。mode 为 all，可作主 agent 也可作 task 子代理。
 
-### 3. 验证
+### 3. 全局安装（可选，不推荐代餐场景）
+
+在全局 `~/.config/opencode/opencode.json` 的 `plugin` 数组加入同一路径：
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "~/.config/opencode/plugins/opencode-route-standard/opencode-route-standard.js"
+  ]
+}
+```
+
+全局启用时若想对某个项目豁免，在该项目根目录放 `opencode-route-standard.json` 且 `enabled: false`。
+
+### 4. 验证
 
 ```sh
 opencode run --agent router-standard --model deepseek/deepseek-v4-flash --thinking "列出你当前可用的所有工具名称" --dir <测试目录>

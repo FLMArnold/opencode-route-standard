@@ -55,5 +55,6 @@ opencode run --agent build "列出你当前可用的所有工具名称" --model 
 ## Git 隔离规则
 
 - 本仓库是独立 git 仓库（harness-RnD 铁律）。**禁止**对 `~/.config/opencode/`（含 3.7GB `opencode.db`）git init。
+- **本插件是代餐插件（临时用用）**：使用方优先推荐**隔离 git 目录**方式安装（项目级 opencode.json 注册），用完即弃；全局安装不推荐（见 README 安装章节）。
 - 测试通过前不注册全局 `opencode.json` plugin 数组，只注册在 `sandbox/opencode.json`。
 - provider apiKey 走 `/connect`（auth.json），不写入任何配置文件。
