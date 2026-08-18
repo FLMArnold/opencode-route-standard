@@ -38,7 +38,7 @@ Thinking: We need to inspect the current directory for buggy.js. Let's list file
 | `chat.message` | 首轮窄工具面：非核心工具**显式置 false**（`resolveTools` 黑名单语义 `user.tools[k]===false` → 工具从请求 schema 消失）；插件 dev 工具与 `narrowExclude` 配置项同样显式 false；**agent gate**：非 router-standard 会话直接跳过 |
 | `experimental.chat.system.transform` | system **完全替换**为 RL 训练句（`You are a helpful software engineer assistant.`）+ 一行 cwd 锚点（opencode 内置基础提示是唯一承载 cwd 的地方，完全替换后模型会丢失工作目录锚点，实测曾写到 `Temp\opencode`）；**agent gate**：从会话历史判定 agent |
 | `tool.definition` | bash/edit 的 description 与参数描述压缩为 RL 简洁版（内置工具描述携带大量指令文本，模型 think 会引用并据此推理，把接口拉离 RL 训练形状）；工具描述保持环境无关，本机环境由 messages.transform 近距锚点注入 |
-| `experimental.chat.messages.transform` | **近距 RL 环境锚点**：把 RL 身份 + cwd + 本机环境（Windows + PowerShell 5.1）以 synthetic 文本**追加到当前用户消息末尾**（最后注入，幂等守卫按锚点文本去重）；**第二轮调用前**补注入第一轮被屏蔽且不会再现的 AGENTS.md（项目根 + 全局，每会话一次）；**agent gate**：只作用于 router-standard 会话 |
+| `experimental.chat.messages.transform` | **剥离 superpowers bootstrap**（恢复步开头复数）+ **近距 RL 环境锚点**：把 RL 身份 + cwd + 本机环境（Windows + PowerShell 5.1）以 synthetic 文本**追加到当前用户消息末尾**（最后注入，幂等守卫按锚点文本去重）；**第二轮调用前**补注入第一轮被屏蔽且不会再现的 AGENTS.md（项目根 + 全局，每会话一次）；**agent gate**：只作用于 router-standard 会话 |
 | `tool.execute.before` | 记录首个工具调用 → 后续请求放开全量工具 |
 | `tool.dev_router_status` | 查看会话路由状态（窄面/已放开、persona、核心工具集） |
 
@@ -116,9 +116,13 @@ opencode run --agent router-standard "在 sandbox 目录创建 r2.txt，内容 h
 opencode run --agent router-standard "列出你当前可用的所有工具名称" --model opencode-go/deepseek-v4-flash --print-logs
 # 建文件任务触发首个工具调用后，应额外看到 router: second-call context injected
 opencode run --agent router-standard "在 sandbox 目录创建 r2.txt，内容 hello-r2，然后确认存在" --model opencode-go/deepseek-v4-flash --print-logs
+# debug=true 时应看到 router: standard bootstrap stripped（剥离 superpowers 引导块）
+opencode run --agent router-standard "在 sandbox 目录创建 r2.txt，内容 hello-r2，然后确认存在" --model opencode-go/deepseek-v4-flash --print-logs
 ```
 
-预期：Shell 明确答 Windows PowerShell 5.1；建文件首条命令即 PowerShell；debug 日志出现 `router: standard-anchor injected` 与（建文件任务）`router: second-call context injected agent=router-standard`；首轮工具面仍只有 bash+edit；第二轮注入后路由不失败、任务正常完成。
+预期：Shell 明确答 Windows PowerShell 5.1；建文件首条命令即 PowerShell；debug 日志出现 `router: standard bootstrap stripped`、`router: standard-anchor injected` 与（建文件任务）`router: second-call context injected agent=router-standard`；首轮工具面仍只有 bash+edit；第二轮注入后路由不失败、任务正常完成。
+
+> **插件改动生效需重启 TUI**：插件模块在 opencode 启动时加载，会话中途改代码不会热生效；headless `opencode run` 每次全新进程自动用新代码。剥离 bootstrap 后步开头复数恢复中（headless 实测出现 "We need answer user..."，仍有方差，需多轮采样）。
 
 agent gate 负向验证（issue #1 验收）：
 

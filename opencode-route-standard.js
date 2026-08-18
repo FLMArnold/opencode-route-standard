@@ -238,6 +238,29 @@ export const OpencodeRouteStandard = async ({ client, directory }) => {
         const lastUser = [...messages].reverse().find((m) => m.info?.role === "user")
         if (!lastUser || !Array.isArray(lastUser.parts)) return
         const sessionID = lastUser.info.sessionID
+        // 剥离 superpowers bootstrap（首条用户消息开头的 EXTREMELY_IMPORTANT 块）：
+        // 本插件注册在 superpowers 之后（注册顺序=执行顺序），此处后执行，负责把
+        // 会压掉 RL 步开头复数自述的强指令块移除，恢复 standard 接口纯净。
+        const firstUser = messages.find((m) => m.info?.role === "user")
+        if (firstUser && Array.isArray(firstUser.parts)) {
+          const stripped = firstUser.parts.filter(
+            (p) => !(p.type === "text" && p.text && p.text.includes("EXTREMELY_IMPORTANT"))
+          )
+          if (stripped.length !== firstUser.parts.length) {
+            firstUser.parts.splice(0, firstUser.parts.length, ...stripped)
+            if (cfg.debug) {
+              try {
+                await client.app.log({
+                  body: {
+                    service: "opencode-route-standard",
+                    level: "info",
+                    message: `router: standard bootstrap stripped agent=${agent}`,
+                  },
+                })
+              } catch { /* silent */ }
+            }
+          }
+        }
         // 近距 RL 环境锚点（每轮幂等追加；环境信息不硬编码进工具 schema）
         if (!lastUser.parts.some((p) => p.text && p.text.includes("Environment: Windows"))) {
           const anchor =
